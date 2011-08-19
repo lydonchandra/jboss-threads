@@ -27,6 +27,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -34,7 +35,96 @@ import junit.framework.TestCase;
 
 public final class TestQueuelessExecutor extends TestCase {
 	
-	public void atestBasic() throws InterruptedException {
+	public void testExecuteNonBlockingNullThread() {
+		ThreadFactory nullFactory = new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable r) {
+				return null;
+			}
+		};
+		
+		int cpuCount = Runtime.getRuntime().availableProcessors();
+		int maxThreadNo = 1; 
+		final CountDownLatch taskUnfreezer = new CountDownLatch(1);
+		final CountDownLatch taskFinishLine = new CountDownLatch(maxThreadNo);
+		
+		final ExecutorService handoffExec = Executors.newFixedThreadPool(cpuCount);
+		final QueuelessExecutor queuelessExec = new QueuelessExecutor(nullFactory, JBossExecutors.directExecutor(), 
+													null	, 2000);
+		queuelessExec.setHandoffExecutor(handoffExec);
+		queuelessExec.setKeepAliveTime(2000);
+		queuelessExec.setMaxThreads(maxThreadNo);
+		queuelessExec.setBlocking(false);
+		
+		final CountDownLatch finishLatch2 = new CountDownLatch(1);
+		queuelessExec.setBlocking(true);
+		
+		final int threadNo = 111;
+		
+		try {
+			queuelessExec.executeNonBlocking(new Runnable() {
+				@Override
+				public void run() {
+						for( int j=0; j<50000000; j++) {
+							int k = j*j*j;
+							k = k*k*k*k*k*k;
+						}
+						System.out.println("Thread  : " + threadNo + " running inside queuelessExecutor");
+						System.out.println("Thread count: " + queuelessExec.getCurrentThreadCount());
+						finishLatch2.countDown();
+				}			
+			}
+			);
+		}
+		catch(ThreadCreationException tce) {
+			System.out.println("Expecting ThreadCreationException and getting it.");
+		}
+
+		
+		
+		
+		
+	}
+	
+	public void testExecuteNonBlocking() {
+		
+		JBossThreadFactory threadFactory = new JBossThreadFactory(null, null, null, "test thread %p %t", null, null);
+		
+		int cpuCount = Runtime.getRuntime().availableProcessors();
+		int maxThreadNo = 1; 
+		final CountDownLatch taskUnfreezer = new CountDownLatch(1);
+		final CountDownLatch taskFinishLine = new CountDownLatch(maxThreadNo);
+		
+		final ExecutorService handoffExec = Executors.newFixedThreadPool(cpuCount);
+		final QueuelessExecutor queuelessExec = new QueuelessExecutor(threadFactory, JBossExecutors.directExecutor(), 
+													null	, 2000);
+		queuelessExec.setHandoffExecutor(handoffExec);
+		queuelessExec.setKeepAliveTime(2000);
+		queuelessExec.setMaxThreads(maxThreadNo);
+		queuelessExec.setBlocking(false);
+		
+		final CountDownLatch finishLatch2 = new CountDownLatch(1);
+		queuelessExec.setBlocking(true);
+		
+		final int threadNo = 111;
+		queuelessExec.executeNonBlocking(new Runnable() {
+			@Override
+			public void run() {
+					for( int j=0; j<50000000; j++) {
+						int k = j*j*j;
+						k = k*k*k*k*k*k;
+					}
+					System.out.println("Thread  : " + threadNo + " running inside queuelessExecutor");
+					System.out.println("Thread count: " + queuelessExec.getCurrentThreadCount());
+					finishLatch2.countDown();
+			}			
+		}
+		);
+
+	}
+	
+	
+	public void testBasic() throws InterruptedException {
 		JBossThreadFactory threadFactory = new JBossThreadFactory(null, null, null, "test thread %p %t", null, null);
 		
 		int cpuCount = Runtime.getRuntime().availableProcessors();
