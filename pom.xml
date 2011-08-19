@@ -57,6 +57,14 @@
     </dependencies>
     <build>
         <plugins>
+		
+		
+    	<plugin>
+            <groupId>com.atlassian.maven.plugins</groupId>
+            <artifactId>maven-clover2-plugin</artifactId>
+            <version>3.1.0</version>
+        </plugin>
+		
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
