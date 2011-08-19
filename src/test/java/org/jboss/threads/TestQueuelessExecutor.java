@@ -22,6 +22,7 @@
 
 package org.jboss.threads;
 
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,19 +34,21 @@ import junit.framework.TestCase;
 
 public final class TestQueuelessExecutor extends TestCase {
 	
-	public void testBasic() throws InterruptedException {
+	public void atestBasic() throws InterruptedException {
 		JBossThreadFactory threadFactory = new JBossThreadFactory(null, null, null, "test thread %p %t", null, null);
 		
 		int cpuCount = Runtime.getRuntime().availableProcessors();
-		int maxThreadNo = cpuCount * 4; 
+		int maxThreadNo = cpuCount * 2; 
 		final CountDownLatch taskUnfreezer = new CountDownLatch(1);
 		final CountDownLatch taskFinishLine = new CountDownLatch(maxThreadNo);
 		
 		final ExecutorService handoffExec = Executors.newFixedThreadPool(cpuCount);
 		final QueuelessExecutor queuelessExec = new QueuelessExecutor(threadFactory, JBossExecutors.directExecutor(), 
-													handoffExec	, 2000);
-		
+													null	, 2000);
+		queuelessExec.setHandoffExecutor(handoffExec);
+		queuelessExec.setKeepAliveTime(2000);
 		queuelessExec.setMaxThreads(maxThreadNo);
+		queuelessExec.setBlocking(false);
 		
 		for( int i=0; i<maxThreadNo; i++ ) {
 			final int threadNo = i;
@@ -54,7 +57,7 @@ public final class TestQueuelessExecutor extends TestCase {
 				public void run() {
 					try {
 						taskUnfreezer.await();
-						for( int j=0; j<50000000; j++) {
+						for( int j=0; j<5000000; j++) {
 							int k = j*j*j;
 							k = k*k*k*k*k*k;
 						}
@@ -76,18 +79,145 @@ public final class TestQueuelessExecutor extends TestCase {
 		taskFinishLine.await(1112000L,TimeUnit.MILLISECONDS);
 		long end = System.nanoTime();
 		
-		System.out.println((end-start)/1000);
+		System.out.println((end-start)/1000000);
 		
 		assertTrue(queuelessExec.getCurrentThreadCount() == maxThreadNo);
 		assertTrue(queuelessExec.getHandoffExecutor() == handoffExec );
 		assertTrue(queuelessExec.getMaxThreads() == maxThreadNo);
 		assertTrue(queuelessExec.getLargestThreadCount() == maxThreadNo);
 		assertTrue(queuelessExec.getKeepAliveTime() == 2000);
+		assertTrue(queuelessExec.getRejectedCount() == 0);
+		assertFalse(queuelessExec.isBlocking());
 		
+		
+		
+		/////////////////////////
+		// executeBlocking
+		/////////////////////////
+		final CountDownLatch finishLatch = new CountDownLatch(1);
+		queuelessExec.setBlocking(true);
+		final int threadNo = 999;
+		queuelessExec.executeBlocking(new Runnable() {
+			@Override
+			public void run() {
+					for( int j=0; j<500000; j++) {
+						int k = j*j*j;
+						k = k*k*k*k*k*k;
+					}
+					System.out.println("Thread  : " + threadNo + " running inside queuelessExecutor");
+					System.out.println("Thread count: " + queuelessExec.getCurrentThreadCount());
+					finishLatch.countDown();
+			}			
+		});
+		finishLatch.await();
+		
+		
+		/////////////////////////////////////
+		// executeBlocking(... , ... , ... )
+		/////////////////////////////////////
+		
+		final CountDownLatch finishLatch2 = new CountDownLatch(1);
+		queuelessExec.setBlocking(true);
+		final int threadNo2 = 888;
+		queuelessExec.executeBlocking(new Runnable() {
+			@Override
+			public void run() {
+					for( int j=0; j<50000000; j++) {
+						int k = j*j*j;
+						k = k*k*k*k*k*k;
+					}
+					System.out.println("Thread  : " + threadNo2 + " running inside queuelessExecutor");
+					System.out.println("Thread count: " + queuelessExec.getCurrentThreadCount());
+					finishLatch2.countDown();
+			}			
+		},
+		10L, TimeUnit.MILLISECONDS
+		);
+		
+		finishLatch2.await();
+		
+		
+		///////////////
+		// shutting down
+		/////////////////
+		
+		queuelessExec.shutdown();
+		queuelessExec.awaitTermination(2000, TimeUnit.MILLISECONDS);
+		List<Runnable> neverRunTask = queuelessExec.shutdownNow();
+		assertTrue("all tasks should've been executed", neverRunTask.size() == 0);
+		assertTrue(queuelessExec.isShutdown());
+		
+		if( !queuelessExec.isTerminated()) {
+			queuelessExec.shutdownNow();
+		}
+		
+		//assertTrue(queuelessExec.isTerminated());
 	}
 
-	
-	
+	/**
+	 * Expect ExecutionTimedOutException because we only have 1 thread, try to execute 2 tasks,
+	 * each is only allowed 10ms of execution time
+	 * @throws RejectedExecutionException
+	 * @throws InterruptedException
+	 */
+	public void testExecuteBlockingFail() throws RejectedExecutionException, InterruptedException {
+		
+		
+		JBossThreadFactory threadFactory = new JBossThreadFactory(null, null, null, "test thread %p %t", null, null);
+		
+		int cpuCount = Runtime.getRuntime().availableProcessors();
+		int maxThreadNo = 1; 
+		final CountDownLatch taskUnfreezer = new CountDownLatch(1);
+		final CountDownLatch taskFinishLine = new CountDownLatch(maxThreadNo);
+		
+		final ExecutorService handoffExec = Executors.newFixedThreadPool(cpuCount);
+		final QueuelessExecutor queuelessExec = new QueuelessExecutor(threadFactory, JBossExecutors.directExecutor(), 
+													null	, 2000);
+		queuelessExec.setHandoffExecutor(handoffExec);
+		queuelessExec.setKeepAliveTime(2000);
+		queuelessExec.setMaxThreads(maxThreadNo);
+		queuelessExec.setBlocking(false);
+		
+		final CountDownLatch finishLatch2 = new CountDownLatch(1);
+		queuelessExec.setBlocking(true);
+		
+		final int threadNo3 = 777;
+		queuelessExec.executeBlocking(new Runnable() {
+			@Override
+			public void run() {
+					for( int j=0; j<50000000; j++) {
+						int k = j*j*j;
+						k = k*k*k*k*k*k;
+					}
+					System.out.println("Thread  : " + threadNo3 + " running inside queuelessExecutor");
+					System.out.println("Thread count: " + queuelessExec.getCurrentThreadCount());
+					finishLatch2.countDown();
+			}			
+		},
+		10L, TimeUnit.MILLISECONDS
+		);
+		
+		try {
+			queuelessExec.executeBlocking(new Runnable() {
+				@Override
+				public void run() {
+						for( int j=0; j<50000000; j++) {
+							int k = j*j*j;
+							k = k*k*k*k*k*k;
+						}
+						System.out.println("Thread  : " + threadNo3 + " running inside queuelessExecutor");
+						System.out.println("Thread count: " + queuelessExec.getCurrentThreadCount());
+						finishLatch2.countDown();
+				}			
+			},
+			10L, TimeUnit.MILLISECONDS
+			);
+		}
+		catch(ExecutionTimedOutException etoe) {
+			System.out.println("Timed out....");
+		}
+
+	}
 	
 //    private final JBossThreadFactory threadFactory = new JBossThreadFactory(null, null, null, "test thread %p %t", null, null);
 //
