@@ -26,6 +26,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import junit.framework.Assert;
 import junit.framework.TestCase;
@@ -88,7 +89,17 @@ public final class TestOrderedExecutor extends TestCase {
 		Assert.assertTrue((Integer)task7future.get() == 666);
 		Assert.assertFalse(orderedExec.isShutdown());
 		Assert.assertFalse(orderedExec.isTerminated());
+		Assert.assertFalse(orderedExec.awaitTermination(1000, TimeUnit.MILLISECONDS));
 		
+		try {
+			orderedExec.shutdown();
+		} catch (SecurityException se) {
+		}
+		
+		try {
+			orderedExec.shutdownNow();
+		} catch (SecurityException se) {
+		}
 		
 	}
 	
