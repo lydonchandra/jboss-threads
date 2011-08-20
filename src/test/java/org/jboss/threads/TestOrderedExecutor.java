@@ -22,8 +22,10 @@
 
 package org.jboss.threads;
 
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import junit.framework.Assert;
 import junit.framework.TestCase;
@@ -47,16 +49,7 @@ public final class TestOrderedExecutor extends TestCase {
 			}			
 		});
 		
-		orderedExec.executeNonBlocking(
-			new Runnable() {
-					@Override
-					public void run() {
-							System.out.println("Task 2");
-							taskFinishLine.countDown();
-					}			
-				});
-		
-		orderedExec.executeNonBlocking(
+		orderedExec.executeBlocking(
 				new Runnable() {
 				@Override
 				public void run() {
@@ -65,6 +58,34 @@ public final class TestOrderedExecutor extends TestCase {
 				}			
 		});
 		
+		
+		orderedExec.execute(
+				new Runnable() {
+				@Override
+				public void run() {
+						System.out.println("Task 5");
+						taskFinishLine.countDown();
+				}			
+		});
+		
+		
+		Future task7future = orderedExec.submit(new Callable(){
+			@Override
+			public Object call() throws Exception {
+				return 666;
+			}
+		});
+
+		orderedExec.execute(
+				new Runnable() {
+				@Override
+				public void run() {
+						System.out.println("Dummy task that's never executed");
+						taskFinishLine.countDown();
+				}			
+		});
+
+		Assert.assertTrue((Integer)task7future.get() == 666);
 		Assert.assertFalse(orderedExec.isShutdown());
 		Assert.assertFalse(orderedExec.isTerminated());
 		
