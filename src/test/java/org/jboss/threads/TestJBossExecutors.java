@@ -24,35 +24,24 @@ package org.jboss.threads;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 import junit.framework.Assert;
 import junit.framework.TestCase;
 
-public final class TestUninterruptibleExecutor extends TestCase {
+public final class TestJBossExecutors extends TestCase {
 	
-	public void testConstructor() throws InterruptedException, ExecutionException {
-		
-		UninterruptibleExecutor uninterruptExec = new UninterruptibleExecutor(Executors.newFixedThreadPool(1));
-
-		// task to be interrupted
-		Runnable runnable = new Runnable() {
+	public void testUninterruptibleExecutor() {
+		Executor uninterrupibleExec = JBossExecutors.uninterruptibleExecutor( JBossExecutors.directExecutor() );
+		uninterrupibleExec.execute(new Runnable() {
 			@Override
 			public void run() {
-				try {
-					System.out.println("starting uninterruptible task 1");
-					Thread.sleep(3000);
-					System.out.println("stopping uninterruptible task 1");
-				} catch (InterruptedException e) {
-					assertFalse("This line should never be reached.", true);
-					e.printStackTrace();
-				}				
-			}			
-		};
-		final Thread t1 = new Thread(runnable);
+				System.out.println("Running in uninterruptibl executor.");
+			}
+		});
 		
-		uninterruptExec.execute(t1);
+		Assert.assertTrue(uninterrupibleExec.equals(uninterrupibleExec) );
+				
 		
 	}
 	
